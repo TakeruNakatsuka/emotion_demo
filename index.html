@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ココロチェック - 音声感情AIデモ</title>
+  <style>
+    :root {
+      --cream: #FFFBF2;
+      --green: #8FA991;
+      --dark-green: #526B59;
+      --pale-green: #E8EEE0;
+      --card: #FFFEFA;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--cream);
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      max-width: 480px;
+      width: 100%;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      color: var(--dark-green);
+      font-size: 24px;
+      margin: 0 0 8px 0;
+    }
+    .header p {
+      color: #666;
+      font-size: 14px;
+      margin: 0;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 6px 20px rgba(182, 179, 159, 0.15);
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .status-badge {
+      display: inline-block;
+      background: var(--pale-green);
+      color: var(--dark-green);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+    .btn-primary {
+      background-color: var(--green);
+      color: white;
+      border: none;
+      border-radius: 16px;
+      padding: 16px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      width: 100%;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary.recording {
+      background-color: #D97A7A;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.7; }
+      100% { opacity: 1; }
+    }
+    .status-text {
+      margin: 16px 0 0 0;
+      font-size: 14px;
+      color: #555;
+      min-height: 20px;
+    }
+    .sample-section {
+      border-top: 1px dashed #DDD;
+      margin-top: 20px;
+      padding-top: 16px;
+    }
+    .sample-title {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 10px;
+    }
+    .sample-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .btn-sample {
+      background: var(--pale-green);
+      color: var(--dark-green);
+      border: 1px solid rgba(143, 169, 145, 0.4);
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-sample:hover { background: #DCE5D2; }
+    .result-box {
+      display: none;
+      background: var(--pale-green);
+      border-radius: 20px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .result-emotion {
+      font-size: 28px;
+      font-weight: bold;
+      color: var(--dark-green);
+      margin: 8px 0;
+    }
+    .feedback-area {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(82, 107, 89, 0.2);
+    }
+    .feedback-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .btn-fb {
+      background: white;
+      color: var(--dark-green);
+      border: 1px solid var(--green);
+      border-radius: 20px;
+      padding: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn-fb:hover { background: var(--green); color: white; }
+    .user-id-bar {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      align-items: center;
+      font-size: 12px;
+      color: #666;
+    }
+    .user-id-bar input {
+      border: 1px solid #CCC;
+      border-radius: 8px;
+      padding: 4px 8px;
+      width: 130px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>🐑 ココロチェック Webデモ</h1>
+    <p>ブラウザ上で自動WAV変換＆SVM感情認識を体験できます</p>
+  </div>
+
+  <div class="card">
+    <div class="status-badge" id="serverStatus">サーバー接続確認中...</div>
+    
+    <button id="recordBtn" class="btn-primary">🎙️ マイクで録音して判定する</button>
+    <p class="status-text" id="statusText">ボタンを押して2〜3秒話しかけてみてください</p>
+
+    <div class="result-box" id="resultBox">
+      <div style="font-size: 12px; color: #555;">AIの感情判定結果</div>
+      <div class="result-emotion" id="resultEmotion">😊 喜び (Joy)</div>
+      
+      <div class="feedback-area">
+        <div style="font-size: 12px; font-weight: bold; color: var(--dark-green);">
+          判定が違う場合は正解を教えてください（パーソナライズ学習）
+        </div>
+        <div class="feedback-btns">
+          <button class="btn-fb" onclick="sendFeedback('Joy')">😊 喜び</button>
+          <button class="btn-fb" onclick="sendFeedback('Sorrow')">😢 悲しみ</button>
+          <button class="btn-fb" onclick="sendFeedback('Anger')">😠 怒り</button>
+          <button class="btn-fb" onclick="sendFeedback('Neutral')">😌 普通</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sample-section">
+      <div class="sample-title">※マイクが使えない環境用（擬似WAVデータ即時送信テスト）</div>
+      <div class="sample-grid">
+        <button class="btn-sample" onclick="testWithSyntheticWav('Joy')">😊 喜びトーンで試す</button>
+        <button class="btn-sample" onclick="testWithSyntheticWav('Anger')">😠 怒りトーンで試す</button>
+        <button class="btn-sample" onclick="testWithSyntheticWav('Sorrow')">😢 悲しみトーンで試す</button>
+        <button class="btn-sample" onclick="testWithSyntheticWav('Neutral')">😌 普通トーンで試す</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="user-id-bar">
+    <span>デモ用ユーザーID:</span>
+    <input type="text" id="userIdInput" value="interview_guest">
+  </div>
+</div>
+
+<script>
+  const API_BASE = "https://emotion-make-brain.onrender.com";
+  let isRecording = false;
+  let audioContext;
+  let mediaStream;
+  let scriptProcessor;
+  let audioData = [];
+  let lastWavBlob = null;
+
+  const recordBtn = document.getElementById('recordBtn');
+  const statusText = document.getElementById('statusText');
+  const serverStatus = document.getElementById('serverStatus');
+  const resultBox = document.getElementById('resultBox');
+  const resultEmotion = document.getElementById('resultEmotion');
+
+  const emotionMap = {
+    'Joy': '😊 喜び (Joy)',
+    'Sorrow': '😢 悲しみ (Sorrow)',
+    'Anger': '😠 怒り (Anger)',
+    'Neutral': '😌 普通 (Neutral)'
+  };
+
+  // 起動時にRenderサーバーのスリープを解除（WakeUp Ping）
+  window.addEventListener('DOMContentLoaded', async () => {
+    try {
+      await fetch(`${API_BASE}/`, { mode: 'no-cors' });
+      serverStatus.textContent = "🟢 AIサーバー稼働中 (Render)";
+    } catch (e) {
+      serverStatus.textContent = "🟡 サーバー起動待機中...";
+    }
+  });
+
+  // マイク録音とリアルタイムWAVデータ収集
+  recordBtn.addEventListener('click', async () => {
+    if (!isRecording) {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
+        const source = audioContext.createMediaStreamSource(mediaStream);
+        scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+        
+        audioData = [];
+        scriptProcessor.onaudioprocess = (e) => {
+          if (!isRecording) return;
+          const channelData = e.inputBuffer.getChannelData(0);
+          audioData.push(new Float32Array(channelData));
+        };
+
+        source.connect(scriptProcessor);
+        scriptProcessor.connect(audioContext.destination);
+
+        isRecording = true;
+        recordBtn.textContent = "⏹️ 録音を停止して解析する";
+        recordBtn.classList.add('recording');
+        statusText.textContent = "録音中... 話し終わったらボタンを押してください";
+        resultBox.style.display = 'none';
+      } catch (err) {
+        statusText.textContent = "⚠️ マイクへのアクセスが許可されませんでした。下のテストボタンをお試しください。";
+      }
+    } else {
+      isRecording = false;
+      recordBtn.textContent = "🎙️ マイクで録音して判定する";
+      recordBtn.classList.remove('recording');
+      statusText.textContent = "WAVエンコード＆AI解析中...";
+
+      scriptProcessor.disconnect();
+      mediaStream.getTracks().forEach(track => track.stop());
+
+      const wavBlob = encodeWAV(audioData, audioContext.sampleRate);
+      lastWavBlob = wavBlob;
+      await sendAudioToApi(wavBlob);
+    }
+  });
+
+  // Float32配列を標準16bit PCM WAVバイナリに変換
+  function encodeWAV(buffers, sampleRate) {
+    let totalLength = buffers.reduce((acc, buf) => acc + buf.length, 0);
+    let samples = new Float32Array(totalLength);
+    let offset = 0;
+    for (let buf of buffers) {
+      samples.set(buf, offset);
+      offset += buf.length;
+    }
+
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (view, offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // Mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    let index = 44;
+    for (let i = 0; i < samples.length; i++, index += 2) {
+      let s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(index, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return new Blob([view], { type: 'audio/wav' });
+  }
+
+  // マイク不要テスト用：感情ごとにピッチ・抑揚を変えた擬似WAVをメモリ上で生成
+  async function testWithSyntheticWav(toneType) {
+    statusText.textContent = `テスト用音声(${toneType})をWAV生成して解析中...`;
+    resultBox.style.display = 'none';
+    const sampleRate = 22050;
+    const duration = 1.5;
+    const samples = new Float32Array(sampleRate * duration);
+    
+    const freqMap = { 'Joy': 440, 'Anger': 620, 'Sorrow': 220, 'Neutral': 310 };
+    const baseFreq = freqMap[toneType] || 330;
+
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sampleRate;
+      const mod = toneType === 'Joy' ? Math.sin(2 * Math.PI * 6 * t) * 40 : 0;
+      samples[i] = 0.4 * Math.sin(2 * Math.PI * (baseFreq + mod) * t);
+    }
+
+    const wavBlob = encodeWAV([samples], sampleRate);
+    lastWavBlob = wavBlob;
+    await sendAudioToApi(wavBlob);
+  }
+
+  // FastAPI (/analyze-emotion/) へWAV送信
+  async function sendAudioToApi(wavBlob) {
+    const userId = document.getElementById('userIdInput').value || 'interview_guest';
+    const formData = new FormData();
+    formData.append('user_id', userId);
+    formData.append('file', wavBlob, `voice_${userId}.wav`);
+
+    try {
+      const response = await fetch(`${API_BASE}/analyze-emotion/`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      const rawText = await response.text();
+      if (!response.ok) {
+        statusText.textContent = `エラー(${response.status}): ${rawText}`;
+        return;
+      }
+
+      const data = JSON.parse(rawText);
+      if (data.status === 'success') {
+        statusText.textContent = "解析が完了しました！";
+        resultEmotion.textContent = emotionMap[data.emotion] || data.emotion;
+        resultBox.style.display = 'block';
+        serverStatus.textContent = "🟢 AIサーバー稼働中 (Render)";
+      } else {
+        statusText.textContent = "判定失敗: " + rawText;
+      }
+    } catch (error) {
+      statusText.textContent = "通信エラー: " + error.message;
+    }
+  }
+
+  // FastAPI (/feedback/) へ再学習リクエスト送信
+  async function sendFeedback(correctEmotion) {
+    if (!lastWavBlob) return;
+    const userId = document.getElementById('userIdInput').value || 'interview_guest';
+    statusText.textContent = "パーソナライズ学習データを送信中...";
+
+    const formData = new FormData();
+    formData.append('user_id', userId);
+    formData.append('correct_emotion', correctEmotion);
+    formData.append('file', lastWavBlob, `voice_${userId}.wav`);
+
+    try {
+      const response = await fetch(`${API_BASE}/feedback/`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      const rawText = await response.text();
+      if (!response.ok) {
+        statusText.textContent = `学習エラー(${response.status}): ${rawText}`;
+        return;
+      }
+
+      const data = JSON.parse(rawText);
+      if (data.status === 'success') {
+        resultEmotion.textContent = emotionMap[correctEmotion];
+        statusText.textContent = `✨ 「${userId}」専用AIとして再学習・保存しました！`;
+      } else {
+        statusText.textContent = "学習データの送信に失敗しました: " + rawText;
+      }
+    } catch (e) {
+      statusText.textContent = "通信エラーが発生しました: " + e.message;
+    }
+  }
+</script>
+
+</body>
+</html>
